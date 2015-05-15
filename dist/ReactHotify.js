@@ -435,12 +435,34 @@ return /******/ (function(modules) { // webpackBootstrap
 	function makeProxy(proxy) {
 	  var current = null;
 
-	  function createProxyMethod(key) {
-	    return function () {
-	      if (typeof current[key] === 'function') {
-	        return current[key].apply(this, arguments);
-	      }
-	    };
+	  function createProxyMethod(key, descriptor, descKey) {
+	    if (typeof descriptor[descKey] === 'function') {
+	      descriptor[descKey] = function (firstArgument) {
+	        var storedDescriptor = Object.getOwnPropertyDescriptor(current, key);
+	        if (storedDescriptor) {
+	          if (typeof storedDescriptor[descKey] === 'function') {
+	            return storedDescriptor[descKey].apply(this, arguments);
+	          } else if (descKey === 'get') {
+	            return this[key];
+	          } else if (descKey === 'set') {
+	            this[key] = firstArgument;
+	          }
+	        }
+	      };
+	    }
+	  }
+
+	  function patchProperty(proto, key) {
+	    var descriptor = Object.getOwnPropertyDescriptor(current, key);
+
+	    if ((descriptor.get || descriptor.set || typeof descriptor.value === 'function') && key !== 'type' && key !== 'constructor') {
+
+	      createProxyMethod(key, descriptor, 'get');
+	      createProxyMethod(key, descriptor, 'set');
+	      createProxyMethod(key, descriptor, 'value');
+	    }
+
+	    Object.defineProperty(proto, key, descriptor);
 	  }
 
 	  return function proxyTo(fresh) {
@@ -454,7 +476,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	    // Update proxy method list
 	    addedKeys.forEach(function (key) {
-	      proxy[key] = createProxyMethod(key);
+	      patchProperty(proxy, key);
 	    });
 	    removedKeys.forEach(function (key) {
 	      delete proxy[key];
@@ -465,7 +487,6 @@ return /******/ (function(modules) { // webpackBootstrap
 	  };
 	}
 
-	;
 	module.exports = exports['default'];
 
 /***/ },
